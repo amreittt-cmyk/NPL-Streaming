@@ -1,0 +1,228 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  VIEWER
+  STREAMER
+  ADMIN
+}
+
+enum StreamStatus {
+  LIVE
+  SCHEDULED
+  ENDED
+}
+
+enum TournamentStatus {
+  UPCOMING
+  LIVE
+  COMPLETED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model User {
+  id                     String                   @id @default(cuid())
+  name                   String
+  email                  String                   @unique
+  passwordHash           String
+  role                   UserRole                 @default(VIEWER)
+  bio                    String?
+  avatarUrl              String?
+  bannerUrl              String?
+  emailVerified          Boolean                  @default(false)
+  emailVerificationToken String?
+  passwordResetToken     String?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  orders                 Order[]
+  streams                Stream[]
+  chatMessages           ChatMessage[]
+  followers              StreamFollow[]
+  likes                  StreamLike[]
+  wishlist               WishlistItem[]
+  registrations          TournamentRegistration[]
+}
+
+model Stream {
+  id             String         @id @default(cuid())
+  title          String
+  slug           String         @unique
+  description    String
+  game           String
+  category       String
+  status         StreamStatus   @default(SCHEDULED)
+  viewerCount    Int            @default(0)
+  thumbnailUrl   String
+  streamUrl      String
+  scheduledFor   DateTime?
+  startedAt      DateTime?
+  tags           String[]
+  streamerId     String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  streamer       User           @relation(fields: [streamerId], references: [id])
+  chatMessages   ChatMessage[]
+  follows        StreamFollow[]
+  likes          StreamLike[]
+  vods           Vod[]
+}
+
+model Vod {
+  id          String   @id @default(cuid())
+  title       String
+  videoUrl    String
+  thumbnail   String
+  duration    String
+  views       Int      @default(0)
+  createdAt   DateTime @default(now())
+  streamId    String
+  stream      Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+  userId    String
+  streamId  String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stream    Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+}
+
+model StreamFollow {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  userId    String
+  streamId  String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stream    Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, streamId])
+}
+
+model StreamLike {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  userId    String
+  streamId  String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stream    Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, streamId])
+}
+
+model Tournament {
+  id            String                   @id @default(cuid())
+  title         String
+  slug          String                   @unique
+  description   String
+  game          String
+  status        TournamentStatus         @default(UPCOMING)
+  coverImageUrl String
+  prizePool     String
+  location      String
+  startDate     DateTime
+  endDate       DateTime
+  bracket       Json
+  schedule      Json
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  teams         TournamentTeam[]
+  registrations TournamentRegistration[]
+}
+
+model TournamentTeam {
+  id           String      @id @default(cuid())
+  name         String
+  logoUrl      String
+  captain      String
+  region       String
+  wins         Int         @default(0)
+  losses       Int         @default(0)
+  tournamentId String
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+}
+
+model TournamentRegistration {
+  id           String      @id @default(cuid())
+  teamName     String
+  contactEmail String
+  managerName  String
+  notes        String?
+  status       String      @default("PENDING")
+  createdAt    DateTime    @default(now())
+  tournamentId String
+  userId       String?
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model Product {
+  id          String          @id @default(cuid())
+  name        String
+  slug        String          @unique
+  category    String
+  description String
+  price       Float
+  stock       Int
+  featured    Boolean         @default(false)
+  imageUrls   String[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  orderItems  OrderItem[]
+  wishlist    WishlistItem[]
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  status          OrderStatus @default(PENDING)
+  paymentStatus   String      @default("pending")
+  subtotal        Float
+  tax             Float
+  shipping        Float
+  total           Float
+  couponCode      String?
+  guestEmail      String?
+  shippingAddress Json
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  items           OrderItem[]
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  name      String
+  imageUrl  String
+  price     Float
+  quantity  Int
+  orderId   String
+  productId String?
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+}
